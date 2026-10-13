@@ -1,48 +1,66 @@
+/* Version secuencial: prueba todas las llaves 0, 1, 2, ... hasta encontrar la que descifra el texto.
+ * Sirve como linea base para calcular speedups (Tsec / Tpar). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "bf_common.h"
 #include "des_utils.h"
 
+static double ahora(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (double) t.tv_sec + (double) t.tv_nsec * 1e-9;
+}
+
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Uso: %s <bits_de_busqueda> <llave_real>\n", argv[0]);
+    Config cfg;
+    char error[300] = "";
+    if (parsearArgumentos(argc, argv, &cfg, error, sizeof error) != 0) {
+        fprintf(stderr, "Error: %s\n\n", error);
+        imprimirUso(argv[0], "");
         return 1;
     }
 
-    int bits = atoi(argv[1]);
-    long llaveReal = atol(argv[2]);
+    int longitud = 0;
+    unsigned char *cifrado = leerArchivoBinario(cfg.archivoCifrado, &longitud, 1, error, sizeof error);
+    if (cifrado == NULL) {
+        fprintf(stderr, "Error: %s\n", error);
+        return 1;
+    }
+    unsigned char *buffer = malloc((size_t) longitud + 1);
+    if (buffer == NULL) {
+        fprintf(stderr, "Error: sin memoria\n");
+        free(cifrado);
+        return 1;
+    }
 
-    const char *textoPlano = "Esta es una prueba de fuerza bruta";
-    const char *palabraClave = "prueba de fuerza";
+    imprimirEncabezado("secuencial", 1, 1, &cfg, longitud);
 
-    int longitud = ((int) strlen(textoPlano) / 8 + 1) * 8;
-    unsigned char cifrado[longitud];
-    memset(cifrado, 0, longitud);
-    memcpy(cifrado, textoPlano, strlen(textoPlano));
-    cifrarBloque(llaveReal, cifrado, longitud);
-
-    long limite = 1L << bits;
-
-    clock_t inicio = clock();
-
+    long limite = limiteDeBits(cfg.bits);
     long llaveEncontrada = -1;
+    long probadas = 0;
+    int agotado = 0;
+
+    double inicio = ahora();
     for (long intento = 0; intento < limite; intento++) {
-        if (probarLlave(intento, cifrado, longitud, palabraClave)) {
+        probadas++;
+        if (probarLlaveBuffer(intento, cifrado, longitud, cfg.palabraClave, buffer)) {
             llaveEncontrada = intento;
             break;
         }
+        if ((intento & (INTERVALO_REVISION - 1)) == INTERVALO_REVISION - 1 && cfg.tiempoMax > 0 &&
+            ahora() - inicio > cfg.tiempoMax) {
+            agotado = 1;
+            break;
+        }
     }
+    double segundos = ahora() - inicio;
 
-    double segundos = (double) (clock() - inicio) / CLOCKS_PER_SEC;
-
-    if (llaveEncontrada >= 0) {
-        printf("Llave encontrada: %ld\n", llaveEncontrada);
-    } else {
-        printf("No se encontro la llave en el rango dado\n");
-    }
-    printf("Bits de busqueda: %d\n", bits);
-    printf("Tiempo de busqueda: %.4f segundos\n", segundos);
-
+    imprimirResultado("secuencial", 1, 1, &cfg, llaveEncontrada, agotado, segundos, probadas, probadas,
+                      cifrado, longitud);
+    free(buffer);
+    free(cifrado);
     return 0;
 }

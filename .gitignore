@@ -1,3 +1,9 @@
 secuencial
 bruteforce_mpi
+bruteforce_hybrid
+bruteforce_interleaved
+bruteforce_masterworker
+bruteforce_randoffset
+des_tool
 *.o
+*.cif

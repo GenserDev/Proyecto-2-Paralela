@@ -1,5 +1,6 @@
 #include "des_utils.h"
 #include <openssl/des.h>
+#include <stdlib.h>
 #include <string.h>
 
 void llaveDesdeNumero(long numero, unsigned char llave[8]) {
@@ -32,12 +33,18 @@ void descifrarBloque(long numero, unsigned char *datos, int longitud) {
     procesarBloques(numero, datos, longitud, DES_DECRYPT);
 }
 
+int probarLlaveBuffer(long numero, const unsigned char *cifrado, int longitud,
+                      const char *palabraClave, unsigned char *buffer) {
+    memcpy(buffer, cifrado, longitud);
+    buffer[longitud] = '\0';
+    descifrarBloque(numero, buffer, longitud);
+    return strstr((char *) buffer, palabraClave) != NULL;
+}
+
 int probarLlave(long numero, const unsigned char *cifrado, int longitud, const char *palabraClave) {
-    unsigned char copia[longitud + 1];
-    memcpy(copia, cifrado, longitud);
-    copia[longitud] = '\0';
-
-    descifrarBloque(numero, copia, longitud);
-
-    return strstr((char *) copia, palabraClave) != NULL;
+    unsigned char *buffer = malloc((size_t) longitud + 1);
+    if (buffer == NULL) return 0;
+    int resultado = probarLlaveBuffer(numero, cifrado, longitud, palabraClave, buffer);
+    free(buffer);
+    return resultado;
 }
